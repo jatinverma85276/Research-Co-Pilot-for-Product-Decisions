@@ -26,12 +26,15 @@ function buildPrompt(productIdea: string) {
   const system = `
 You are a senior market research analyst.
 
-Given a product or business idea, you must create a short, practical research snapshot.
+You have access to external tools via an MCP server called "research-mcp".
+Use the tool "save_research_report" at the end to store the final report
+if the report is high quality.
 
 Rules:
 - Be realistic but concise.
 - If you are unsure about something, say "Unknown" rather than inventing fake data.
 - Always respond in valid JSON that matches the required keys.
+- You may call tools, but your *final* output must still be a JSON object.
 `;
 
   const user = `
@@ -77,6 +80,16 @@ async function run() {
     text: {
       format: { type: "json_object" },
     },
+    tools: [
+      {
+        type: "mcp",
+        server_label: "research-mcp",
+        server_url: "https://bc03bf7952d6.ngrok-free.app/mcp",
+        // (optional but recommended)
+        allowed_tools: ["save_research_report"],
+        require_approval: "never", // for local dev only
+      },
+    ],
   });
 
   // 6. Get the combined text output and parse JSON

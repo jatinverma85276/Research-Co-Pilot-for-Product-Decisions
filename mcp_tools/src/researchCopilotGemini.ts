@@ -70,12 +70,10 @@ async function run() {
   const response = await client.models.generateContent({
     model: "gemini-2.5-flash",
     // contents: "Explain how AI works in a few words",
-    contents: [
-      { role: "system", parts: [{ text: system }] },
-      { role: "user", parts: [{ text: user }] },
-    ],
+    contents: [{ role: "user", parts: [{ text: user }] }],
     // Force JSON object output
     config: {
+      systemInstruction: system,
       responseMimeType: "application/json",
     },
     // text: {
