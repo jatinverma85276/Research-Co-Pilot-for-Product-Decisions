@@ -1,6 +1,5 @@
 import "dotenv/config";
 import OpenAI from "openai";
-// const OpenAI = require("openai");
 
 // 1. Init client
 const client = new OpenAI({
@@ -32,7 +31,7 @@ if the report is high quality.
 
 Rules:
 - Be realistic but concise.
-- If you are unsure about something, say "Unknown" rather than inventing fake data.
+- If unsure about something, say "Unknown".
 - Always respond in valid JSON that matches the required keys.
 - You may call tools, but your *final* output must still be a JSON object.
 `;
@@ -80,11 +79,12 @@ async function run() {
     text: {
       format: { type: "json_object" },
     },
+
     tools: [
       {
         type: "mcp",
         server_label: "research-mcp",
-        server_url: "https://bc03bf7952d6.ngrok-free.app/mcp",
+        server_url: "https://ceaf90687a4c.ngrok-free.app/mcp",
         // (optional but recommended)
         allowed_tools: ["save_research_report"],
         require_approval: "never", // for local dev only

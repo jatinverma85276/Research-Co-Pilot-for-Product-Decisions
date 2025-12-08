@@ -24,20 +24,18 @@ mcpServer.registerTool(
   {
     title: "Save Research Report",
     description: "Save a research report to disk as a markdown file.",
-    // NOTE: per MCP TS SDK docs, schemas are plain objects of zod fields
-    inputSchema: {
+    inputSchema: z.object({
       title: z.string().min(1),
       content: z.string().min(1),
-    },
-    outputSchema: {
+    }),
+    // Optional: describe response shape (useful for some clients)
+    outputSchema: z.object({
       saved: z.boolean(),
       filename: z.string(),
       path: z.string(),
-    },
+    }),
   },
   async ({ title, content }) => {
-    console.log("🛠 save_research_report called with title:", title);
-
     const safeTitle = title.replace(/[^a-z0-9\-]+/gi, "_").toLowerCase();
     const filename = `${safeTitle}_${Date.now()}.md`;
     const filepath = path.join(reportsDir, filename);
@@ -50,6 +48,7 @@ mcpServer.registerTool(
       path: filepath,
     };
 
+    // MCP tools return "content" + optional "structuredContent"
     return {
       content: [
         {
@@ -62,43 +61,27 @@ mcpServer.registerTool(
   }
 );
 
-// ---------- 3. Shared Streamable HTTP transport ----------
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: undefined,
-  enableJsonResponse: true,
-
-  // for local dev; in prod you usually also set enableDnsRebindingProtection: true
-});
-
-// Connect MCP server to the transport ONCE
-mcpServer.connect(transport).catch((err) => {
-  console.error("Error connecting MCP server to transport:", err);
-  process.exit(1);
-});
-
-// ---------- 4. Express app wiring ----------
+// ---------- 3. Wire it to HTTP /mcp using Streamable HTTP ----------
 const app = express();
 app.use(express.json());
 
-// Route ALL HTTP methods for /mcp through the transport
-app.all("/mcp", async (req, res) => {
-  try {
-    console.log(`${req.method} ${req.path}`);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    console.error("Error in /mcp handler:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal MCP server error" });
-    }
-  }
+app.post("/mcp", async (req, res) => {
+  // One transport per HTTP request (per spec)
+  const transport = new StreamableHTTPServerTransport({
+    enableJsonResponse: true,
+    sessionIdGenerator: undefined,
+    // for local dev; in prod you usually also set enableDnsRebindingProtection: true
+  });
+
+  res.on("close", () => {
+    transport.close();
+  });
+
+  await mcpServer.connect(transport);
+  await transport.handleRequest(req, res, req.body);
 });
 
 const PORT = parseInt(process.env.PORT || "4000", 10);
-app
-  .listen(PORT, () => {
-    console.log(`🚀 MCP server "research-mcp" on http://localhost:${PORT}/mcp`);
-  })
-  .on("error", (err) => {
-    console.error("HTTP server error:", err);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`🚀 MCP server "research-mcp" on http://localhost:${PORT}/mcp`);
+});

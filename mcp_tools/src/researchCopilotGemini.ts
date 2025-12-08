@@ -1,10 +1,9 @@
 import "dotenv/config";
-// import OpenAI from "openai";
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
 // 1. Init client
-const client = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_API_KEY ?? "",
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 // 2. TypeScript type for our report
@@ -26,12 +25,15 @@ function buildPrompt(productIdea: string) {
   const system = `
 You are a senior market research analyst.
 
-Given a product or business idea, you must create a short, practical research snapshot.
+You have access to external tools via an MCP server called "research-mcp".
+Use the tool "save_research_report" at the end to store the final report
+if the report is high quality.
 
 Rules:
 - Be realistic but concise.
-- If you are unsure about something, say "Unknown" rather than inventing fake data.
+- If unsure about something, say "Unknown".
 - Always respond in valid JSON that matches the required keys.
+- You may call tools, but your *final* output must still be a JSON object.
 `;
 
   const user = `
@@ -66,23 +68,32 @@ async function run() {
 
   const { system, user } = buildPrompt(productIdea);
 
-  // 5. Call Gemini Responses API with JSON mode
-  const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    // contents: "Explain how AI works in a few words",
-    contents: [{ role: "user", parts: [{ text: user }] }],
+  // 5. Call OpenAI Responses API with JSON mode
+  const response = await client.responses.create({
+    model: "gpt-5-mini", // or any current text-capable model
+    input: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
     // Force JSON object output
-    config: {
-      systemInstruction: system,
-      responseMimeType: "application/json",
+    text: {
+      format: { type: "json_object" },
     },
-    // text: {
-    //   format: { type: "json_object" },
-    // },
+
+    tools: [
+      {
+        type: "mcp",
+        server_label: "research-mcp",
+        server_url: "https://ceaf90687a4c.ngrok-free.app/mcp",
+        // (optional but recommended)
+        allowed_tools: ["save_research_report"],
+        require_approval: "never", // for local dev only
+      },
+    ],
   });
 
   // 6. Get the combined text output and parse JSON
-  const outputText = response.text ?? "";
+  const outputText = response.output_text;
 
   let report: ResearchReport;
   try {
